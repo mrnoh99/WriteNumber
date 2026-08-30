@@ -185,6 +185,52 @@
   // ---------------------------------------------------------------------
   // Mask (paintable silhouette of the number) + guide (visual scaffolding)
   // ---------------------------------------------------------------------
+  // Digit "1" is drawn as a plain vertical bar (no top flag, no bottom foot)
+  // instead of the font glyph, per the simplified shape requested.
+  function drawOneBar(ctx, cursorX, top, height, advanceWidth, size, mode) {
+    const barWidth = size * 0.2;
+    const cx = cursorX + advanceWidth / 2;
+    const topY = top + height * 0.03;
+    const botY = top + height * 0.99;
+    if (mode === 'fill') {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = barWidth;
+      ctx.beginPath();
+      ctx.moveTo(cx, topY);
+      ctx.lineTo(cx, botY);
+      ctx.stroke();
+      ctx.restore();
+    } else if (mode === 'stroke') {
+      const half = barWidth / 2;
+      ctx.beginPath();
+      ctx.rect(cx - half, topY, barWidth, botY - topY);
+      ctx.stroke();
+    }
+  }
+
+  // Draws `text` character by character so digit "1" can use drawOneBar
+  // while every other digit uses the normal font glyph. mode 'fill' uses
+  // ctx.fillStyle/fillText, mode 'stroke' uses ctx.strokeStyle/strokeText
+  // (dash pattern, line width etc. must already be set on ctx by the caller).
+  function drawGlyphString(ctx, text, glyphX, glyphY, metrics, size, mode) {
+    const top = glyphY - metrics.ascent;
+    const height = metrics.height;
+    let cursor = glyphX;
+    for (const ch of text) {
+      const w = ctx.measureText(ch).width;
+      if (ch === '1') {
+        drawOneBar(ctx, cursor, top, height, w, size, mode);
+      } else if (mode === 'fill') {
+        ctx.fillText(ch, cursor, glyphY);
+      } else if (mode === 'stroke') {
+        ctx.strokeText(ch, cursor, glyphY);
+      }
+      cursor += w;
+    }
+  }
+
   function drawMask(number) {
     const text = String(number);
     let size = cssH * 0.72;
@@ -200,7 +246,7 @@
     maskCtx.fillStyle = '#000';
     maskCtx.textBaseline = 'alphabetic';
     maskCtx.font = getFont(size);
-    maskCtx.fillText(text, x, y);
+    drawGlyphString(maskCtx, text, x, y, m, size, 'fill');
     maskOpaqueCount = sampleAlphaCount(maskCtx, maskCanvas);
     return { size, x, y, metrics: m };
   }
@@ -264,16 +310,16 @@
 
     if (mode === 'thick') {
       guideCtx.fillStyle = 'rgba(79,109,245,0.10)';
-      guideCtx.fillText(text, x, y);
+      drawGlyphString(guideCtx, text, x, y, glyphInfo.metrics, size, 'fill');
       guideCtx.setLineDash([size * 0.05, size * 0.045]);
       guideCtx.lineWidth = Math.max(4, size * 0.02);
       guideCtx.strokeStyle = '#9aa8e8';
-      guideCtx.strokeText(text, x, y);
+      drawGlyphString(guideCtx, text, x, y, glyphInfo.metrics, size, 'stroke');
     } else if (mode === 'thin') {
       guideCtx.setLineDash([size * 0.026, size * 0.05]);
       guideCtx.lineWidth = Math.max(2, size * 0.008);
       guideCtx.strokeStyle = '#b7c0e0';
-      guideCtx.strokeText(text, x, y);
+      drawGlyphString(guideCtx, text, x, y, glyphInfo.metrics, size, 'stroke');
     }
     guideCtx.setLineDash([]);
     drawArrowsForNumber(guideCtx, number, x, y, glyphInfo, size);
@@ -473,7 +519,7 @@
     rctx.fillStyle = currentColor;
     rctx.textBaseline = 'alphabetic';
     rctx.font = getFont(size);
-    rctx.fillText(text, x, y);
+    drawGlyphString(rctx, text, x, y, m, size, 'fill');
 
     resultOverlay.classList.remove('hidden');
     burstConfetti();
