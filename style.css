@@ -1,0 +1,315 @@
+:root {
+  --bg: #eef4ff;
+  --panel-bg: #ffffff;
+  --ink-accent: #4f6df5;
+  --header-h: 64px;
+  --footer-h: 96px;
+  --radius: 20px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--bg);
+  font-family: -apple-system, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ---------- Header ---------- */
+#app-header {
+  height: var(--header-h);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  background: var(--panel-bg);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  z-index: 5;
+}
+
+#app-header h1 {
+  font-size: 22px;
+  margin: 0;
+  color: var(--ink-accent);
+  white-space: nowrap;
+}
+
+#stage-dots {
+  display: flex;
+  gap: 8px;
+}
+
+#stage-dots .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d7deee;
+  transition: background 0.2s, transform 0.2s;
+}
+
+#stage-dots .dot.active {
+  background: var(--ink-accent);
+  transform: scale(1.2);
+}
+
+#stage-dots .dot.done {
+  background: #8fd19e;
+}
+
+#progress-label {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 700;
+  color: #666;
+  background: #f1f4fb;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+#restart-btn {
+  border: none;
+  background: #f1f4fb;
+  font-size: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  touch-action: manipulation;
+}
+
+/* ---------- Main area ---------- */
+#main-area {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  gap: 12px;
+  padding: 12px;
+}
+
+#left-panel {
+  flex: 0 0 38%;
+  background: var(--panel-bg);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  min-height: 0;
+}
+
+#left-caption {
+  font-size: 20px;
+  font-weight: 700;
+  color: #555;
+  margin: 4px 0 12px;
+  text-align: center;
+}
+
+#object-grid {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+#object-grid span {
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.12));
+  animation: pop-in 0.25s ease backwards;
+}
+
+@keyframes pop-in {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+#right-panel {
+  flex: 1 1 62%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+#draw-area {
+  flex: 1;
+  position: relative;
+  background: var(--panel-bg);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  overflow: hidden;
+  touch-action: none;
+}
+
+#draw-area canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#guideCanvas { pointer-events: none; }
+#inkCanvas { pointer-events: auto; touch-action: none; }
+
+#hint-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0.95;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.hidden { display: none !important; }
+
+/* ---------- Result / overlays ---------- */
+#result-overlay, #stage-clear-overlay, #all-clear-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  background: rgba(255,255,255,0.92);
+  z-index: 10;
+  animation: fade-in 0.25s ease;
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+#resultCanvas {
+  width: 50%;
+  height: 46%;
+  max-width: 100%;
+  max-height: 46%;
+  flex: 0 1 auto;
+  position: static !important;
+  animation: pop-in 0.4s ease;
+}
+
+#praise-text {
+  font-size: 28px;
+  font-weight: 800;
+  color: #ff7a45;
+  flex: 0 0 auto;
+}
+
+.stars { display: inline-block; animation: wiggle 0.6s ease infinite alternate; }
+@keyframes wiggle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+
+#next-btn, #stage-next-btn, #restart-btn-2 {
+  font-size: 22px;
+  font-weight: 700;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink-accent);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(79,109,245,0.4);
+  touch-action: manipulation;
+}
+
+#stage-clear-card, #all-clear-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #444;
+  text-align: center;
+  padding: 0 20px;
+}
+
+/* ---------- Footer ---------- */
+#bottom-bar {
+  flex: 0 0 var(--footer-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--panel-bg);
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+  z-index: 5;
+}
+
+#color-picker {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px;
+}
+
+.color-swatch {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08);
+  touch-action: manipulation;
+}
+
+.color-swatch.selected {
+  border-color: #333;
+  transform: scale(1.12);
+}
+
+#action-buttons {
+  display: flex;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+#action-buttons button {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 14px;
+  background: #f1f4fb;
+  color: #444;
+  touch-action: manipulation;
+}
+
+#done-btn {
+  background: #35c46f;
+  color: #fff;
+}
+
+/* ---------- Narrow / portrait fallback ---------- */
+@media (max-aspect-ratio: 4/5) {
+  #main-area { flex-direction: column; }
+  #left-panel { flex: 0 0 32%; }
+  #right-panel { flex: 1 1 68%; }
+}
