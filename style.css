@@ -43,7 +43,7 @@ html, body {
 }
 
 #app-header h1 {
-  font-size: 22px;
+  font-size: 32px;
   margin: 0;
   color: var(--ink-accent);
   white-space: nowrap;
