@@ -108,6 +108,7 @@
   let activePointerId = null;
   let renderScheduled = false;
   let cssW = 0, cssH = 0;
+  let currentGlyphInfo = null;
   let guideCtx = null, inkCtx = null;
   let maskCanvas = null, maskCtx = null, maskOpaqueCount = 0;
   let hintTimer = null;
@@ -424,8 +425,8 @@
   function loadRound() {
     strokes = [];
     activePointerId = null;
-    const glyphInfo = drawMask(currentNumber);
-    drawGuide(currentNumber, currentStageGuideMode(), glyphInfo);
+    currentGlyphInfo = drawMask(currentNumber);
+    drawGuide(currentNumber, currentStageGuideMode(), currentGlyphInfo);
     renderInk();
     renderObjects(currentNumber);
     progressLabel.textContent = `${queuePos + 1} / ${numberQueue.length}`;
@@ -508,22 +509,15 @@
   }
 
   function showResult() {
-    const rw = cssW * 0.62, rh = cssH * 0.6;
-    const rctx = setupHiDPICanvas(resultCanvas, rw, rh);
+    // Reuse the exact size/position/metrics the outline glyph was drawn
+    // with, so the "corrected" reveal matches it exactly, just filled in.
+    const rctx = setupHiDPICanvas(resultCanvas, cssW, cssH);
     const text = String(currentNumber);
-    let size = rh * 0.75;
-    let m = measureGlyph(rctx, text, size);
-    const maxWidth = rw * 0.85;
-    if (m.width > maxWidth) {
-      size = size * (maxWidth / m.width);
-      m = measureGlyph(rctx, text, size);
-    }
-    const x = rw / 2 - m.width / 2;
-    const y = rh / 2 + m.height / 2 - m.descent;
+    const { size, x, y, metrics } = currentGlyphInfo;
     rctx.fillStyle = currentColor;
     rctx.textBaseline = 'alphabetic';
     rctx.font = getFont(size);
-    drawGlyphString(rctx, text, x, y, m, size, 'fill');
+    drawGlyphString(rctx, text, x, y, metrics, size, 'fill');
 
     resultOverlay.classList.remove('hidden');
     actionButtons.classList.add('hidden');
