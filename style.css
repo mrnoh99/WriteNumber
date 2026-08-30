@@ -207,26 +207,19 @@ html, body {
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 #resultCanvas {
-  width: 50%;
-  height: 46%;
+  width: 62%;
+  height: 60%;
   max-width: 100%;
-  max-height: 46%;
+  max-height: 60%;
   flex: 0 1 auto;
   position: static !important;
   animation: pop-in 0.4s ease;
 }
 
-#praise-text {
-  font-size: 28px;
-  font-weight: 800;
-  color: #ff7a45;
-  flex: 0 0 auto;
-}
-
 .stars { display: inline-block; animation: wiggle 0.6s ease infinite alternate; }
 @keyframes wiggle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
 
-#next-btn, #stage-next-btn, #restart-btn-2 {
+#stage-next-btn, #restart-btn-2 {
   font-size: 22px;
   font-weight: 700;
   padding: 14px 32px;
@@ -305,6 +298,32 @@ html, body {
 #done-btn {
   background: #35c46f;
   color: #fff;
+}
+
+#result-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+#result-bar #praise-text {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ff7a45;
+}
+
+#result-bar #next-btn {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 14px;
+  background: var(--ink-accent);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(79,109,245,0.4);
+  touch-action: manipulation;
 }
 
 /* ---------- Narrow / portrait fallback ---------- */

@@ -80,11 +80,13 @@
   const stageDotsEl = document.getElementById('stage-dots');
   const progressLabel = document.getElementById('progress-label');
   const colorPickerEl = document.getElementById('color-picker');
+  const actionButtons = document.getElementById('action-buttons');
   const clearBtn = document.getElementById('clear-btn');
   const doneBtn = document.getElementById('done-btn');
   const hintToast = document.getElementById('hint-toast');
   const resultOverlay = document.getElementById('result-overlay');
   const resultCanvas = document.getElementById('resultCanvas');
+  const resultBar = document.getElementById('result-bar');
   const nextBtn = document.getElementById('next-btn');
   const stageClearOverlay = document.getElementById('stage-clear-overlay');
   const stageClearTitle = document.getElementById('stage-clear-title');
@@ -456,6 +458,8 @@
     allClearOverlay.classList.add('hidden');
     stageClearOverlay.classList.add('hidden');
     resultOverlay.classList.add('hidden');
+    resultBar.classList.add('hidden');
+    actionButtons.classList.remove('hidden');
     startStage();
   }
 
@@ -504,7 +508,7 @@
   }
 
   function showResult() {
-    const rw = cssW * 0.5, rh = cssH * 0.46;
+    const rw = cssW * 0.62, rh = cssH * 0.6;
     const rctx = setupHiDPICanvas(resultCanvas, rw, rh);
     const text = String(currentNumber);
     let size = rh * 0.75;
@@ -522,6 +526,8 @@
     drawGlyphString(rctx, text, x, y, m, size, 'fill');
 
     resultOverlay.classList.remove('hidden');
+    actionButtons.classList.add('hidden');
+    resultBar.classList.remove('hidden');
     burstConfetti();
     speakPraise();
   }
@@ -572,7 +578,12 @@
   // ---------------------------------------------------------------------
   clearBtn.addEventListener('click', () => { strokes = []; activePointerId = null; renderInk(); });
   doneBtn.addEventListener('click', checkCompletion);
-  nextBtn.addEventListener('click', () => { resultOverlay.classList.add('hidden'); advance(); });
+  nextBtn.addEventListener('click', () => {
+    resultOverlay.classList.add('hidden');
+    resultBar.classList.add('hidden');
+    actionButtons.classList.remove('hidden');
+    advance();
+  });
   stageNextBtn.addEventListener('click', () => { stageClearOverlay.classList.add('hidden'); stageIndex++; startStage(); });
   restartBtn2.addEventListener('click', resetAll);
   restartBtn.addEventListener('click', resetAll);
