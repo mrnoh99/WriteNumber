@@ -400,7 +400,7 @@
   function renderObjects(n) {
     objectGrid.innerHTML = '';
     const emoji = OBJECT_EMOJIS[Math.floor(Math.random() * OBJECT_EMOJIS.length)];
-    const fontSize = n <= 4 ? '4.2rem' : n <= 7 ? '3.4rem' : '2.6rem';
+    const fontSize = '4.8rem';
     for (let i = 0; i < n; i++) {
       const span = document.createElement('span');
       span.textContent = emoji;
