@@ -662,6 +662,7 @@
       btn.setAttribute('aria-label', s.label);
       const dot = document.createElement('span');
       dot.className = 'dot' + (i < stageIndex ? ' done' : '') + (i === stageIndex ? ' active' : '');
+      dot.textContent = String(i + 1);
       btn.appendChild(dot);
       btn.addEventListener('click', () => selectStage(i));
       stageDotsEl.appendChild(btn);
