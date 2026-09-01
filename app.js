@@ -814,11 +814,15 @@
   // ---------------------------------------------------------------------
   // Completion / praise
   // ---------------------------------------------------------------------
-  function showHint(msg, spokenText) {
+  function showHintToast(msg) {
     hintToast.textContent = msg;
     hintToast.classList.remove('hidden');
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => hintToast.classList.add('hidden'), 1600);
+  }
+
+  function showHint(msg, spokenText) {
+    showHintToast(msg);
     speakHint(spokenText || msg);
   }
 
@@ -962,6 +966,17 @@
     else speakTTS('잘했어요');
   }
 
+  // Reads the number, then the "모양이 아닌 것 같아요" retry hint - a
+  // recording for either part if one exists and is enabled, otherwise TTS.
+  async function announceRetryHint(number) {
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    const numId = `num-${number}`;
+    if (isUsingCustomVoice(numId)) await playRecording(numId);
+    else speakTTS(String(number));
+    if (isUsingCustomVoice('retry-hint')) await playRecording('retry-hint');
+    else speakTTS('모양이 아닌 것 같아요. 지우고 다시 써볼까요?');
+  }
+
   function burstConfetti() {
     const emojis = ['⭐', '🎉', '✨', '🌟'];
     for (let i = 0; i < 12; i++) {
@@ -1003,14 +1018,13 @@
     announcePraise(currentNumber);
   }
 
-  function retryWithGuide(msg, spokenText) {
-    showHint(msg, spokenText);
+  // The first attempt on this stage is guide-free by design, but once
+  // it's been missed, show a helper guide for the retry instead of
+  // leaving them stuck with no hint at all.
+  function resetForRetry() {
     strokes = [];
     activePointerId = null;
     clearInk();
-    // The first attempt on this stage is guide-free by design, but once
-    // it's been missed, show a helper guide for the retry instead of
-    // leaving them stuck with no hint at all.
     drawGuide(currentNumber, 'thin', currentGlyphInfo);
   }
 
@@ -1019,12 +1033,15 @@
     if (mode === 'none') {
       const totalPoints = strokes.reduce((a, s) => a + s.points.length, 0);
       if (totalPoints < 8) {
-        retryWithGuide('숫자를 크게 써볼까요? ✏️');
+        showHint('숫자를 크게 써볼까요? ✏️');
+        resetForRetry();
         return;
       }
       const score = computeShapeMatchScore();
       if (score < SHAPE_MATCH_THRESHOLD) {
-        retryWithGuide(`${currentNumber}(이)가 아닌 것 같아요. 지우고 다시 써볼까요? ✏️`, `${currentNumber} 모양이 아닌 것 같아요. 지우고 다시 써볼까요?`);
+        showHintToast(`${currentNumber}(이)가 아닌 것 같아요. 지우고 다시 써볼까요? ✏️`);
+        announceRetryHint(currentNumber);
+        resetForRetry();
         return;
       }
       showResult();
@@ -1208,6 +1225,7 @@
     recordingListEl.innerHTML = '';
     for (let i = 1; i <= 10; i++) recordingListEl.appendChild(buildRecordingRow(`num-${i}`, String(i)));
     recordingListEl.appendChild(buildRecordingRow('comment', '칭찬 코멘트'));
+    recordingListEl.appendChild(buildRecordingRow('retry-hint', '다시 써볼까요'));
   }
 
   function buildColorPicker() {
