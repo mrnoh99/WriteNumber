@@ -88,7 +88,19 @@ button:active {
 #stage-dots {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+}
+
+#stage-dots .dot-btn {
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #stage-dots .dot {

@@ -583,10 +583,34 @@
   function updateStageDots() {
     stageDotsEl.innerHTML = '';
     STAGES.forEach((s, i) => {
-      const d = document.createElement('div');
-      d.className = 'dot' + (i < stageIndex ? ' done' : '') + (i === stageIndex ? ' active' : '');
-      stageDotsEl.appendChild(d);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dot-btn';
+      btn.title = s.label;
+      btn.setAttribute('aria-label', s.label);
+      const dot = document.createElement('span');
+      dot.className = 'dot' + (i < stageIndex ? ' done' : '') + (i === stageIndex ? ' active' : '');
+      btn.appendChild(dot);
+      btn.addEventListener('click', () => selectStage(i));
+      stageDotsEl.appendChild(btn);
     });
+  }
+
+  function dismissOverlays() {
+    allClearOverlay.classList.add('hidden');
+    stageClearOverlay.classList.add('hidden');
+    resultOverlay.classList.add('hidden');
+    resultBar.classList.add('hidden');
+    actionButtons.classList.remove('hidden');
+  }
+
+  // Lets a stage be picked directly from the header dots instead of only
+  // being reachable by finishing the previous one. Jumping to a stage
+  // (including the current one) always starts it fresh.
+  function selectStage(index) {
+    stageIndex = index;
+    dismissOverlays();
+    startStage();
   }
 
   function loadRound() {
@@ -626,11 +650,7 @@
 
   function resetAll() {
     stageIndex = 0;
-    allClearOverlay.classList.add('hidden');
-    stageClearOverlay.classList.add('hidden');
-    resultOverlay.classList.add('hidden');
-    resultBar.classList.add('hidden');
-    actionButtons.classList.remove('hidden');
+    dismissOverlays();
     startStage();
   }
 
