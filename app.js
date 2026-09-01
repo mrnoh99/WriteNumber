@@ -158,6 +158,7 @@
   let guideCtx = null, inkCtx = null;
   let maskCanvas = null, maskCtx = null, maskOpaqueCount = 0;
   let hintTimer = null;
+  let midAnnounced = false;
 
   // ---------------------------------------------------------------------
   // Helpers
@@ -503,6 +504,26 @@
   function endStroke(e) {
     if (e.pointerId !== activePointerId) return;
     activePointerId = null;
+    checkMidAnnounce();
+  }
+
+  // Reads the number a second time once the child is partway through
+  // drawing it (checked after each stroke, so it fires once per round).
+  function checkMidAnnounce() {
+    if (midAnnounced) return;
+    const mode = currentStageGuideMode();
+    let progressed;
+    if (mode === 'none') {
+      const totalPoints = strokes.reduce((a, s) => a + s.points.length, 0);
+      progressed = totalPoints >= 4;
+    } else {
+      const inkCount = sampleAlphaCount(inkCtx, inkCanvas);
+      progressed = maskOpaqueCount > 0 && inkCount / maskOpaqueCount >= 0.12;
+    }
+    if (progressed) {
+      midAnnounced = true;
+      speakNumber(currentNumber);
+    }
   }
   inkCanvas.addEventListener('pointerup', endStroke);
   inkCanvas.addEventListener('pointercancel', endStroke);
@@ -538,11 +559,13 @@
   function loadRound() {
     strokes = [];
     activePointerId = null;
+    midAnnounced = false;
     currentGlyphInfo = drawMask(currentNumber);
     drawGuide(currentNumber, currentStageGuideMode(), currentGlyphInfo);
     renderInk();
     renderObjects(currentNumber);
     progressLabel.textContent = `${queuePos + 1} / ${numberQueue.length}`;
+    speakNumber(currentNumber);
   }
 
   function startStage() {
@@ -587,14 +610,31 @@
     hintTimer = setTimeout(() => hintToast.classList.add('hidden'), 1600);
   }
 
-  function speakPraise() {
+  function makeUtterance(text) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR';
+    u.rate = 1.0;
+    return u;
+  }
+
+  // Reads just the number, interrupting anything currently being spoken.
+  // Used when a round is presented and once more partway through drawing.
+  function speakNumber(number) {
     try {
       if (!('speechSynthesis' in window)) return;
-      const u = new SpeechSynthesisUtterance('잘했어요');
-      u.lang = 'ko-KR';
-      u.rate = 1.0;
       window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+      window.speechSynthesis.speak(makeUtterance(String(number)));
+    } catch (e) { /* speech synthesis is a nice-to-have; ignore failures */ }
+  }
+
+  // Reads the number once more, then "잘했어요" - queued as two utterances
+  // so they play back-to-back instead of overlapping.
+  function announcePraise(number) {
+    try {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(makeUtterance(String(number)));
+      window.speechSynthesis.speak(makeUtterance('잘했어요'));
     } catch (e) { /* speech synthesis is a nice-to-have; ignore failures */ }
   }
 
@@ -636,7 +676,7 @@
     actionButtons.classList.add('hidden');
     resultBar.classList.remove('hidden');
     burstConfetti();
-    speakPraise();
+    announcePraise(currentNumber);
   }
 
   function checkCompletion() {
