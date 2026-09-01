@@ -113,6 +113,38 @@
     ]]
   };
 
+  // Alternate stroke forms accepted only when *recognizing* a freeform
+  // drawing (stage 4) - not used for the guide/mask/arrows in earlier
+  // stages, which always teach the single canonical DIGIT_STROKES form.
+  // Kids very commonly write "1" with a top flag and a base serif, and
+  // "4" with an open (non-triangle) top instead of a closed apex; both
+  // are legitimate, so the recognizer tries each digit's plain form and
+  // these variants and keeps whichever scores best.
+  const DIGIT_RECOGNITION_ALTS = {
+    '1': [
+      [
+        { cmd: 'M', x: 30, y: 34 },
+        { cmd: 'L', x: 50, y: 18 },
+        { cmd: 'L', x: 50, y: 134 }
+      ],
+      [
+        { cmd: 'M', x: 30, y: 134 },
+        { cmd: 'L', x: 70, y: 134 }
+      ]
+    ],
+    '4': [
+      [
+        { cmd: 'M', x: 66, y: 6 },
+        { cmd: 'L', x: 14, y: 88 },
+        { cmd: 'L', x: 90, y: 88 }
+      ],
+      [
+        { cmd: 'M', x: 70, y: 88 },
+        { cmd: 'L', x: 70, y: 134 }
+      ]
+    ]
+  };
+
   const STROKE_BOX_W = 100;
   const STROKE_BOX_H = 140;
 
@@ -156,6 +188,7 @@
   let currentGlyphInfo = null;
   let guideCtx = null, inkCtx = null;
   let maskCanvas = null, maskCtx = null, maskOpaqueCount = 0;
+  let altMaskCanvas = null, altMaskCtx = null;
   let hintTimer = null;
   let midAnnounced = false;
 
@@ -206,6 +239,8 @@
     inkCtx = setupHiDPICanvas(inkCanvas, cssW, cssH);
     maskCanvas = maskCanvas || document.createElement('canvas');
     maskCtx = setupHiDPICanvas(maskCanvas, cssW, cssH);
+    altMaskCanvas = altMaskCanvas || document.createElement('canvas');
+    altMaskCtx = setupHiDPICanvas(altMaskCanvas, cssW, cssH);
     if (numberQueue.length) {
       strokes = [];
       loadRound();
@@ -567,17 +602,62 @@
     return union > 0 ? inter / union : 0;
   }
 
-  // Returns an IoU score in [0,1], or 0 if there's nothing to compare.
+  // Renders one reference silhouette into altMaskCtx: every character uses
+  // its plain DIGIT_STROKES form except altCharIndex, which (if that digit
+  // has a recognition variant) uses the alternate form instead.
+  function renderAltReference(lay, altCharIndex) {
+    altMaskCtx.clearRect(0, 0, altMaskCanvas.width, altMaskCanvas.height);
+    altMaskCtx.lineCap = 'round';
+    altMaskCtx.lineJoin = 'round';
+    altMaskCtx.setLineDash([]);
+    altMaskCtx.strokeStyle = '#000';
+    altMaskCtx.lineWidth = lay.charW * 0.26;
+    for (let i = 0; i < lay.n; i++) {
+      const ch = lay.text[i];
+      const box = charBox(lay, i);
+      const useAlt = i === altCharIndex && DIGIT_RECOGNITION_ALTS[ch];
+      const strokesForCh = useAlt ? DIGIT_RECOGNITION_ALTS[ch] : DIGIT_STROKES[ch];
+      if (!strokesForCh) continue;
+      for (const stroke of strokesForCh) {
+        altMaskCtx.beginPath();
+        tracePathOnCtx(altMaskCtx, stroke, box);
+        altMaskCtx.stroke();
+      }
+    }
+  }
+
+  // Returns the best IoU score in [0,1] across the digit's plain form and
+  // any known handwriting variants (see DIGIT_RECOGNITION_ALTS), or 0 if
+  // there's nothing to compare.
   function computeShapeMatchScore() {
     const w = inkCanvas.width, h = inkCanvas.height;
     const inkData = inkCtx.getImageData(0, 0, w, h).data;
-    const maskData = maskCtx.getImageData(0, 0, w, h).data;
     const inkBBox = findInkBBox(inkData, w, h);
-    const maskBBox = findInkBBox(maskData, w, h);
-    if (!inkBBox || !maskBBox) return 0;
+    if (!inkBBox) return 0;
     const inkGrid = buildCanonicalGrid(inkData, w, h, inkBBox);
-    const maskGrid = buildCanonicalGrid(maskData, w, h, maskBBox);
-    return gridIoU(inkGrid, maskGrid);
+
+    const lay = currentGlyphInfo;
+    const altCandidates = [null];
+    for (let i = 0; i < lay.n; i++) {
+      if (DIGIT_RECOGNITION_ALTS[lay.text[i]]) altCandidates.push(i);
+    }
+
+    let best = 0;
+    for (const altIndex of altCandidates) {
+      let refData;
+      if (altIndex === null) {
+        refData = maskCtx.getImageData(0, 0, w, h).data;
+      } else {
+        renderAltReference(lay, altIndex);
+        refData = altMaskCtx.getImageData(0, 0, w, h).data;
+      }
+      const refBBox = findInkBBox(refData, w, h);
+      if (!refBBox) continue;
+      const refGrid = buildCanonicalGrid(refData, w, h, refBBox);
+      const score = gridIoU(inkGrid, refGrid);
+      if (score > best) best = score;
+    }
+    return best;
   }
 
   const SHAPE_MATCH_THRESHOLD = 0.3;
