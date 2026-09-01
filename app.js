@@ -152,7 +152,6 @@
   let currentColor = COLORS[0];
   let strokes = [];
   let activePointerId = null;
-  let renderScheduled = false;
   let cssW = 0, cssH = 0;
   let currentGlyphInfo = null;
   let guideCtx = null, inkCtx = null;
@@ -450,54 +449,88 @@
     return { x: e.clientX - rect.left, y: e.clientY - rect.top, pressure: e.pressure };
   }
 
-  function scheduleRender() {
-    if (renderScheduled) return;
-    renderScheduled = true;
-    requestAnimationFrame(() => { renderScheduled = false; renderInk(); });
+  // Ink is drawn incrementally (one new segment per input event, straight
+  // onto the visible canvas) instead of clearing and replaying every point
+  // of every stroke on every frame - that full-redraw approach got
+  // noticeably laggy as a stroke grew long. Clipping to the number's
+  // silhouette is handled by a CSS mask-image (applyInkMask), which the
+  // browser composites for free, instead of a per-frame destination-in
+  // drawImage of the whole canvas.
+  function clearInk() {
+    inkCtx.clearRect(0, 0, cssW, cssH);
   }
 
-  function renderInk() {
-    inkCtx.clearRect(0, 0, cssW, cssH);
+  function inkLineWidth() {
+    return Math.max(14, cssW * 0.035);
+  }
+
+  function drawDot(p, color) {
+    inkCtx.fillStyle = color;
+    inkCtx.beginPath();
+    inkCtx.arc(p.x, p.y, inkLineWidth() / 2, 0, Math.PI * 2);
+    inkCtx.fill();
+  }
+
+  function drawSegment(p0, p1, color) {
+    inkCtx.strokeStyle = color;
     inkCtx.lineJoin = 'round';
     inkCtx.lineCap = 'round';
-    const baseWidth = Math.max(14, cssW * 0.035);
-    for (const s of strokes) {
-      if (!s.points.length) continue;
-      inkCtx.strokeStyle = s.color;
-      inkCtx.fillStyle = s.color;
-      if (s.points.length === 1) {
-        const p = s.points[0];
-        inkCtx.beginPath();
-        inkCtx.arc(p.x, p.y, baseWidth / 2, 0, Math.PI * 2);
-        inkCtx.fill();
-        continue;
-      }
-      inkCtx.lineWidth = baseWidth;
-      inkCtx.beginPath();
-      inkCtx.moveTo(s.points[0].x, s.points[0].y);
-      for (let i = 1; i < s.points.length; i++) inkCtx.lineTo(s.points[i].x, s.points[i].y);
-      inkCtx.stroke();
+    inkCtx.lineWidth = inkLineWidth();
+    inkCtx.beginPath();
+    inkCtx.moveTo(p0.x, p0.y);
+    inkCtx.lineTo(p1.x, p1.y);
+    inkCtx.stroke();
+  }
+
+  function applyInkMask(mode) {
+    if (mode === 'none') {
+      inkCanvas.style.maskImage = 'none';
+      inkCanvas.style.webkitMaskImage = 'none';
+      return;
     }
-    if (currentStageGuideMode() !== 'none' && maskCanvas) {
-      inkCtx.globalCompositeOperation = 'destination-in';
-      inkCtx.drawImage(maskCanvas, 0, 0, maskCanvas.width, maskCanvas.height, 0, 0, cssW, cssH);
-      inkCtx.globalCompositeOperation = 'source-over';
+    const url = `url(${maskCanvas.toDataURL()})`;
+    inkCanvas.style.maskImage = url;
+    inkCanvas.style.webkitMaskImage = url;
+    inkCanvas.style.maskSize = '100% 100%';
+    inkCanvas.style.webkitMaskSize = '100% 100%';
+    inkCanvas.style.maskRepeat = 'no-repeat';
+    inkCanvas.style.webkitMaskRepeat = 'no-repeat';
+  }
+
+  // Coverage checks read the raw (unmasked) ink pixels intersected with
+  // the mask, since the visible clipping now happens in CSS rather than
+  // in the canvas's own pixel buffer.
+  function computeMaskedInkCount() {
+    const inkData = inkCtx.getImageData(0, 0, inkCanvas.width, inkCanvas.height).data;
+    const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+    let count = 0;
+    for (let i = 3; i < inkData.length; i += 16) {
+      if (inkData[i] > 10 && maskData[i] > 10) count++;
     }
+    return count;
   }
 
   inkCanvas.addEventListener('pointerdown', (e) => {
     if (activePointerId !== null) return;
     activePointerId = e.pointerId;
     inkCanvas.setPointerCapture(e.pointerId);
-    strokes.push({ color: currentColor, points: [getPos(e)] });
-    scheduleRender();
+    const p = getPos(e);
+    strokes.push({ color: currentColor, points: [p] });
+    drawDot(p, currentColor);
     e.preventDefault();
   });
 
   inkCanvas.addEventListener('pointermove', (e) => {
     if (e.pointerId !== activePointerId) return;
-    strokes[strokes.length - 1].points.push(getPos(e));
-    scheduleRender();
+    const currentStroke = strokes[strokes.length - 1];
+    let events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+    if (!events || events.length === 0) events = [e];
+    for (const ev of events) {
+      const p = getPos(ev);
+      const prev = currentStroke.points[currentStroke.points.length - 1];
+      currentStroke.points.push(p);
+      drawSegment(prev, p, currentStroke.color);
+    }
     e.preventDefault();
   });
 
@@ -517,7 +550,7 @@
       const totalPoints = strokes.reduce((a, s) => a + s.points.length, 0);
       progressed = totalPoints >= 4;
     } else {
-      const inkCount = sampleAlphaCount(inkCtx, inkCanvas);
+      const inkCount = computeMaskedInkCount();
       progressed = maskOpaqueCount > 0 && inkCount / maskOpaqueCount >= 0.12;
     }
     if (progressed) {
@@ -562,7 +595,8 @@
     midAnnounced = false;
     currentGlyphInfo = drawMask(currentNumber);
     drawGuide(currentNumber, currentStageGuideMode(), currentGlyphInfo);
-    renderInk();
+    applyInkMask(currentStageGuideMode());
+    clearInk();
     renderObjects(currentNumber);
     progressLabel.textContent = `${queuePos + 1} / ${numberQueue.length}`;
     speakNumber(currentNumber);
@@ -687,7 +721,7 @@
       showResult();
       return;
     }
-    const inkCount = sampleAlphaCount(inkCtx, inkCanvas);
+    const inkCount = computeMaskedInkCount();
     const coverage = maskOpaqueCount > 0 ? inkCount / maskOpaqueCount : 0;
     if (coverage < 0.22) { showHint('테두리 안쪽을 조금 더 칠해볼까요? 🎨'); return; }
     showResult();
@@ -723,7 +757,7 @@
   // ---------------------------------------------------------------------
   // Wiring
   // ---------------------------------------------------------------------
-  clearBtn.addEventListener('click', () => { strokes = []; activePointerId = null; renderInk(); });
+  clearBtn.addEventListener('click', () => { strokes = []; activePointerId = null; clearInk(); });
   doneBtn.addEventListener('click', checkCompletion);
   nextBtn.addEventListener('click', () => {
     resultOverlay.classList.add('hidden');
