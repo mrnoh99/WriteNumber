@@ -172,6 +172,10 @@
   const allClearOverlay = document.getElementById('all-clear-overlay');
   const restartBtn2 = document.getElementById('restart-btn-2');
   const restartBtn = document.getElementById('restart-btn');
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsOverlay = document.getElementById('settings-overlay');
+  const settingsCloseBtn = document.getElementById('settings-close-btn');
+  const recordingListEl = document.getElementById('recording-list');
 
   // ---------------------------------------------------------------------
   // State
@@ -830,6 +834,82 @@
     } catch (e) { /* speech synthesis is a nice-to-have; ignore failures */ }
   }
 
+  // ---------------------------------------------------------------------
+  // Custom voice recordings (settings screen) - a parent/grandparent can
+  // record their own voice for each number 1-10 and one praise comment,
+  // stored in IndexedDB (this is a static site with no backend, so
+  // recordings live only in this browser/device). Wherever the app would
+  // normally speak via TTS, it uses a matching recording instead if one
+  // exists.
+  // ---------------------------------------------------------------------
+  const RECORDING_DB_NAME = 'writenumber-voices';
+  const RECORDING_STORE = 'recordings';
+  let recordingDB = null;
+  const recordingURLs = {}; // id -> object URL, kept in sync with IndexedDB
+
+  function openRecordingDB() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error('no indexedDB')); return; }
+      const req = indexedDB.open(RECORDING_DB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(RECORDING_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function dbGetAllRecordings() {
+    return new Promise((resolve, reject) => {
+      const tx = recordingDB.transaction(RECORDING_STORE, 'readonly');
+      const store = tx.objectStore(RECORDING_STORE);
+      const out = {};
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) { out[cursor.key] = cursor.value; cursor.continue(); } else resolve(out);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function dbPutRecording(id, blob) {
+    return new Promise((resolve, reject) => {
+      const tx = recordingDB.transaction(RECORDING_STORE, 'readwrite');
+      tx.objectStore(RECORDING_STORE).put(blob, id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  function dbDeleteRecording(id) {
+    return new Promise((resolve, reject) => {
+      const tx = recordingDB.transaction(RECORDING_STORE, 'readwrite');
+      tx.objectStore(RECORDING_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function initRecordings() {
+    try {
+      recordingDB = await openRecordingDB();
+      const all = await dbGetAllRecordings();
+      for (const id of Object.keys(all)) recordingURLs[id] = URL.createObjectURL(all[id]);
+    } catch (e) { /* IndexedDB unavailable - app still works, just without custom voices */ }
+  }
+
+  // Plays a recorded clip and resolves once it finishes (or fails),
+  // so callers can chain a fallback or a second clip afterwards.
+  function playRecording(id) {
+    return new Promise((resolve) => {
+      const url = recordingURLs[id];
+      if (!url) { resolve(false); return; }
+      const audio = new Audio(url);
+      audio.addEventListener('ended', () => resolve(true));
+      audio.addEventListener('error', () => resolve(false));
+      audio.play().then(undefined, () => resolve(false));
+    });
+  }
+
   function makeUtterance(text) {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ko-KR';
@@ -837,25 +917,33 @@
     return u;
   }
 
-  // Reads just the number, interrupting anything currently being spoken.
-  // Used when a round is presented and once more partway through drawing.
-  function speakNumber(number) {
+  function speakTTS(text) {
     try {
       if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(makeUtterance(String(number)));
+      window.speechSynthesis.speak(makeUtterance(text));
     } catch (e) { /* speech synthesis is a nice-to-have; ignore failures */ }
   }
 
-  // Reads the number once more, then "잘했어요" - queued as two utterances
-  // so they play back-to-back instead of overlapping.
-  function announcePraise(number) {
-    try {
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(makeUtterance(String(number)));
-      window.speechSynthesis.speak(makeUtterance('잘했어요'));
-    } catch (e) { /* speech synthesis is a nice-to-have; ignore failures */ }
+  // Reads just the number - a recorded voice if one exists for it,
+  // otherwise TTS - interrupting anything currently being spoken. Used
+  // when a round is presented and once more partway through drawing.
+  function speakNumber(number) {
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    const id = `num-${number}`;
+    if (recordingURLs[id]) { playRecording(id); return; }
+    speakTTS(String(number));
+  }
+
+  // Reads the number once more, then the praise comment - a recording for
+  // either part if one exists, otherwise TTS - back-to-back rather than
+  // overlapping.
+  async function announcePraise(number) {
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    const numId = `num-${number}`;
+    if (recordingURLs[numId]) await playRecording(numId);
+    else speakTTS(String(number));
+    if (recordingURLs['comment']) await playRecording('comment');
+    else speakTTS('잘했어요');
   }
 
   function burstConfetti() {
@@ -944,6 +1032,121 @@
   // ---------------------------------------------------------------------
   // Color picker
   // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // Settings panel - recording UI
+  // ---------------------------------------------------------------------
+  let activeRecorder = null;
+  let activeStream = null;
+
+  function pickRecorderMimeType() {
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return undefined;
+    const candidates = ['audio/mp4', 'audio/webm', 'audio/aac'];
+    for (const c of candidates) if (MediaRecorder.isTypeSupported(c)) return c;
+    return undefined;
+  }
+
+  function startRecording(id, onDone, onError) {
+    if (activeRecorder) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { onError(); return; }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      activeStream = stream;
+      const mimeType = pickRecorderMimeType();
+      const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const chunks = [];
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = async () => {
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        stream.getTracks().forEach((t) => t.stop());
+        activeStream = null;
+        activeRecorder = null;
+        if (recordingURLs[id]) URL.revokeObjectURL(recordingURLs[id]);
+        recordingURLs[id] = URL.createObjectURL(blob);
+        try { if (recordingDB) await dbPutRecording(id, blob); } catch (e) { /* stays usable in-memory this session */ }
+        onDone();
+      };
+      rec.start();
+      activeRecorder = rec;
+    }).catch(() => onError());
+  }
+
+  function stopRecording() {
+    if (activeRecorder && activeRecorder.state !== 'inactive') activeRecorder.stop();
+    else if (activeStream) { activeStream.getTracks().forEach((t) => t.stop()); activeStream = null; }
+  }
+
+  function buildRecordingRow(id, label) {
+    const row = document.createElement('div');
+    row.className = 'recording-row';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'recording-label';
+    labelEl.textContent = label;
+
+    const statusEl = document.createElement('span');
+    statusEl.className = 'recording-status';
+
+    const recordBtn = document.createElement('button');
+    recordBtn.className = 'rec-btn rec-record-btn';
+    recordBtn.textContent = '🎙️ 녹음';
+
+    const playBtn = document.createElement('button');
+    playBtn.className = 'rec-btn rec-play-btn';
+    playBtn.textContent = '▶️ 재생';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'rec-btn rec-delete-btn';
+    deleteBtn.textContent = '🗑️';
+
+    function refresh() {
+      const has = !!recordingURLs[id];
+      statusEl.textContent = has ? '녹음됨' : '녹음 없음';
+      statusEl.classList.toggle('has-recording', has);
+      playBtn.disabled = !has;
+      deleteBtn.disabled = !has;
+    }
+
+    recordBtn.addEventListener('click', () => {
+      if (recordBtn.classList.contains('recording')) {
+        stopRecording();
+        return;
+      }
+      recordBtn.classList.add('recording');
+      recordBtn.textContent = '⏹️ 정지';
+      startRecording(
+        id,
+        () => { recordBtn.classList.remove('recording'); recordBtn.textContent = '🎙️ 녹음'; refresh(); },
+        () => {
+          recordBtn.classList.remove('recording');
+          recordBtn.textContent = '🎙️ 녹음';
+          statusEl.textContent = '마이크 권한이 필요해요';
+        }
+      );
+    });
+
+    playBtn.addEventListener('click', () => { if (recordingURLs[id]) playRecording(id); });
+
+    deleteBtn.addEventListener('click', async () => {
+      if (recordingURLs[id]) URL.revokeObjectURL(recordingURLs[id]);
+      delete recordingURLs[id];
+      try { if (recordingDB) await dbDeleteRecording(id); } catch (e) { /* ignore */ }
+      refresh();
+    });
+
+    row.appendChild(labelEl);
+    row.appendChild(statusEl);
+    row.appendChild(recordBtn);
+    row.appendChild(playBtn);
+    row.appendChild(deleteBtn);
+    refresh();
+    return row;
+  }
+
+  function buildSettingsPanel() {
+    recordingListEl.innerHTML = '';
+    for (let i = 1; i <= 10; i++) recordingListEl.appendChild(buildRecordingRow(`num-${i}`, String(i)));
+    recordingListEl.appendChild(buildRecordingRow('comment', '칭찬 코멘트'));
+  }
+
   function buildColorPicker() {
     COLORS.forEach((c, i) => {
       const b = document.createElement('button');
@@ -973,14 +1176,21 @@
   stageNextBtn.addEventListener('click', () => { stageClearOverlay.classList.add('hidden'); stageIndex++; startStage(); });
   restartBtn2.addEventListener('click', resetAll);
   restartBtn.addEventListener('click', resetAll);
+  settingsBtn.addEventListener('click', () => settingsOverlay.classList.remove('hidden'));
+  settingsCloseBtn.addEventListener('click', () => {
+    stopRecording();
+    settingsOverlay.classList.add('hidden');
+  });
   window.addEventListener('resize', debounce(layout, 200));
   // iOS can report stale viewport dimensions right as orientationchange
   // fires, before layout settles - re-measure a moment later too.
   window.addEventListener('orientationchange', () => setTimeout(layout, 300));
 
-  function init() {
+  async function init() {
     buildColorPicker();
     updateStageDots();
+    await initRecordings();
+    buildSettingsPanel();
     layout();
     startStage();
   }

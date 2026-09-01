@@ -147,7 +147,7 @@ button:active {
   flex: 0 0 auto;
 }
 
-#restart-btn {
+#restart-btn, #settings-btn {
   border: none;
   background: #eef0fd;
   font-size: 20px;
@@ -475,4 +475,154 @@ button:active {
 @media (orientation: portrait) {
   #app { display: none; }
   #rotate-prompt { display: flex; }
+}
+
+/* ---------- Settings / voice recording ---------- */
+#settings-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  background: rgba(40, 40, 60, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 2000;
+  padding: 24px;
+}
+
+#settings-overlay:not(.hidden) { display: flex; }
+
+#settings-card {
+  background: var(--panel-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(30,30,50,0.35);
+  width: min(720px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid #eef0fd;
+  flex: 0 0 auto;
+}
+
+#settings-header h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 24px;
+  margin: 0;
+  color: var(--ink-accent);
+}
+
+#settings-close-btn {
+  border: none;
+  background: #eef0fd;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  color: #666;
+  touch-action: manipulation;
+}
+
+#settings-credit {
+  margin: 14px 22px 0;
+  font-size: 14px;
+  color: #9aa0c0;
+  text-align: center;
+}
+
+#settings-body {
+  padding: 14px 22px 22px;
+  overflow-y: auto;
+}
+
+#settings-body h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  color: var(--text-soft);
+  margin: 10px 0 4px;
+}
+
+#settings-hint-text {
+  font-size: 13px;
+  color: #9098b8;
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.recording-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: #f7f8fd;
+  margin-bottom: 8px;
+}
+
+.recording-label {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  color: var(--ink-accent);
+  width: 34px;
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+.recording-status {
+  font-size: 12px;
+  color: #aeb4d0;
+  flex: 1 1 auto;
+}
+
+.recording-status.has-recording {
+  color: var(--accent-green-dark);
+  font-weight: 700;
+}
+
+.rec-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #e9ecfb;
+  color: var(--text-soft);
+  touch-action: manipulation;
+  flex: 0 0 auto;
+}
+
+.rec-btn:disabled {
+  opacity: 0.4;
+}
+
+.rec-record-btn.recording {
+  background: linear-gradient(120deg, #ff6b6b, #ee4e4e);
+  color: #fff;
+  animation: rec-pulse 1s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(238,78,78,0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(238,78,78,0); }
+}
+
+.rec-play-btn:not(:disabled) {
+  background: linear-gradient(120deg, var(--ink-accent), var(--ink-accent-2));
+  color: #fff;
+}
+
+.rec-delete-btn:not(:disabled) {
+  background: #ffe3e3;
+  color: #c23a3a;
 }

@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=11" />
+<link rel="stylesheet" href="style.css?v=12" />
 </head>
 <body>
 <div id="app">
@@ -20,6 +20,7 @@
     <h1>해성 해준을 위한 숫자 쓰기 ✏️</h1>
     <div id="stage-dots" aria-label="단계"></div>
     <div id="progress-label">1 / 10</div>
+    <button id="settings-btn" title="설정">⚙️</button>
     <button id="restart-btn" title="처음부터 다시">🔄</button>
   </header>
 
@@ -72,6 +73,21 @@
   <p>아이패드를 가로로 돌려서 사용해 주세요</p>
 </div>
 
-<script src="app.js?v=20"></script>
+<div id="settings-overlay" class="hidden">
+  <div id="settings-card">
+    <div id="settings-header">
+      <h2>설정</h2>
+      <button id="settings-close-btn" aria-label="닫기">✕</button>
+    </div>
+    <p id="settings-credit">할아버지가 해성 해준을 위해 만들었어요 · 2026.9</p>
+    <div id="settings-body">
+      <h3>음성 녹음</h3>
+      <p id="settings-hint-text">숫자와 칭찬 메시지를 할아버지·할머니 목소리로 직접 녹음해서 쓸 수 있어요. 녹음이 없으면 자동 음성이 대신 읽어줘요.</p>
+      <div id="recording-list"></div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=21"></script>
 </body>
 </html>
