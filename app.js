@@ -18,57 +18,103 @@
     { key: 'rand-blank', label: '4단계 · 무작위 (도움 없이)', guide: 'none', order: 'random' }
   ];
 
-  // Per-digit stroke-direction arrow hints. Coordinates are fractions
-  // (0..1) of that character's own glyph box: x -> left..right, y -> top..bottom.
-  // Each segment is drawn as an arrow; {cx,cy} makes it a curve.
-  const ARROW_SPECS = {
-    '0': [
-      { x1: 0.5, y1: 0.08, x2: 0.85, y2: 0.5, cx: 0.98, cy: 0.2 },
-      { x1: 0.85, y1: 0.5, x2: 0.5, y2: 0.92, cx: 0.98, cy: 0.8 }
-    ],
-    '1': [
-      { x1: 0.5, y1: 0.15, x2: 0.5, y2: 0.85 }
-    ],
-    '2': [
-      { x1: 0.15, y1: 0.28, x2: 0.85, y2: 0.32, cx: 0.5, cy: 0.02 },
-      { x1: 0.85, y1: 0.32, x2: 0.15, y2: 0.85, cx: 0.6, cy: 0.55 },
-      { x1: 0.15, y1: 0.85, x2: 0.9, y2: 0.88 }
-    ],
-    '3': [
-      { x1: 0.2, y1: 0.15, x2: 0.5, y2: 0.48, cx: 0.95, cy: 0.15 },
-      { x1: 0.5, y1: 0.48, x2: 0.2, y2: 0.85, cx: 0.95, cy: 0.85 }
-    ],
+  // Per-digit handwriting stroke paths, in a shared 100x140 design box.
+  // Each digit is one or more strokes; each stroke is a sequence of path
+  // commands (M/L/Q) written in stroke order/direction. These same paths
+  // drive the paintable mask, the dashed guide line, the direction arrows,
+  // and the "corrected" reveal, so tracing the arrows always draws the
+  // number exactly.
+  const DIGIT_STROKES = {
+    '0': [[
+      { cmd: 'M', x: 50, y: 6 },
+      { cmd: 'Q', cx: 92, cy: 6, x: 92, y: 70 },
+      { cmd: 'Q', cx: 92, cy: 134, x: 50, y: 134 },
+      { cmd: 'Q', cx: 8, cy: 134, x: 8, y: 70 },
+      { cmd: 'Q', cx: 8, cy: 6, x: 50, y: 6 }
+    ]],
+    '1': [[
+      { cmd: 'M', x: 50, y: 18 },
+      { cmd: 'L', x: 50, y: 134 }
+    ]],
+    '2': [[
+      { cmd: 'M', x: 16, y: 34 },
+      { cmd: 'Q', cx: 30, cy: 4, x: 55, y: 6 },
+      { cmd: 'Q', cx: 88, cy: 8, x: 86, y: 34 },
+      { cmd: 'Q', cx: 84, cy: 54, x: 58, y: 72 },
+      { cmd: 'L', x: 18, y: 130 },
+      { cmd: 'L', x: 90, y: 130 }
+    ]],
+    '3': [[
+      { cmd: 'M', x: 18, y: 18 },
+      { cmd: 'Q', cx: 55, cy: 2, x: 82, y: 20 },
+      { cmd: 'Q', cx: 96, cy: 34, x: 74, y: 52 },
+      { cmd: 'Q', cx: 60, cy: 62, x: 46, y: 62 },
+      { cmd: 'Q', cx: 66, cy: 64, x: 84, y: 80 },
+      { cmd: 'Q', cx: 98, cy: 98, x: 80, y: 118 },
+      { cmd: 'Q', cx: 60, cy: 136, x: 18, y: 122 }
+    ]],
     '4': [
-      { x1: 0.25, y1: 0.1, x2: 0.1, y2: 0.62 },
-      { x1: 0.1, y1: 0.62, x2: 0.88, y2: 0.62 },
-      { x1: 0.72, y1: 0.08, x2: 0.72, y2: 0.92 }
+      [
+        { cmd: 'M', x: 66, y: 6 },
+        { cmd: 'L', x: 14, y: 88 },
+        { cmd: 'L', x: 90, y: 88 }
+      ],
+      [
+        { cmd: 'M', x: 70, y: 20 },
+        { cmd: 'L', x: 70, y: 134 }
+      ]
     ],
     '5': [
-      { x1: 0.25, y1: 0.12, x2: 0.75, y2: 0.12 },
-      { x1: 0.25, y1: 0.12, x2: 0.25, y2: 0.45 },
-      { x1: 0.25, y1: 0.45, x2: 0.3, y2: 0.88, cx: 0.95, cy: 0.72 }
+      [
+        { cmd: 'M', x: 22, y: 10 },
+        { cmd: 'L', x: 80, y: 10 }
+      ],
+      [
+        { cmd: 'M', x: 22, y: 10 },
+        { cmd: 'L', x: 18, y: 58 },
+        { cmd: 'Q', cx: 40, cy: 50, x: 64, y: 60 },
+        { cmd: 'Q', cx: 92, cy: 74, x: 84, y: 104 },
+        { cmd: 'Q', cx: 76, cy: 132, x: 28, y: 128 }
+      ]
     ],
-    '6': [
-      { x1: 0.72, y1: 0.1, x2: 0.2, y2: 0.58, cx: 0.1, cy: 0.15 },
-      { x1: 0.2, y1: 0.58, x2: 0.65, y2: 0.85, cx: 0.1, cy: 0.95 },
-      { x1: 0.65, y1: 0.85, x2: 0.25, y2: 0.63, cx: 0.8, cy: 0.68 }
-    ],
-    '7': [
-      { x1: 0.15, y1: 0.13, x2: 0.85, y2: 0.13 },
-      { x1: 0.85, y1: 0.13, x2: 0.3, y2: 0.9 }
-    ],
-    '8': [
-      { x1: 0.5, y1: 0.48, x2: 0.72, y2: 0.15, cx: 0.85, cy: 0.1 },
-      { x1: 0.72, y1: 0.15, x2: 0.5, y2: 0.48, cx: 0.3, cy: 0.1 },
-      { x1: 0.5, y1: 0.48, x2: 0.72, y2: 0.85, cx: 0.9, cy: 0.55 },
-      { x1: 0.72, y1: 0.85, x2: 0.5, y2: 0.48, cx: 0.35, cy: 0.95 }
-    ],
-    '9': [
-      { x1: 0.65, y1: 0.4, x2: 0.35, y2: 0.15, cx: 0.25, cy: 0.08 },
-      { x1: 0.35, y1: 0.15, x2: 0.65, y2: 0.38, cx: 0.78, cy: 0.1 },
-      { x1: 0.6, y1: 0.4, x2: 0.55, y2: 0.9 }
-    ]
+    '6': [[
+      { cmd: 'M', x: 78, y: 10 },
+      { cmd: 'Q', cx: 28, cy: 16, x: 16, y: 62 },
+      { cmd: 'Q', cx: 6, cy: 100, x: 34, y: 122 },
+      { cmd: 'Q', cx: 64, cy: 140, x: 84, y: 112 },
+      { cmd: 'Q', cx: 100, cy: 88, x: 78, y: 70 },
+      { cmd: 'Q', cx: 54, cy: 54, x: 34, y: 72 },
+      { cmd: 'Q', cx: 22, cy: 84, x: 30, y: 100 }
+    ]],
+    '7': [[
+      { cmd: 'M', x: 15, y: 12 },
+      { cmd: 'L', x: 88, y: 12 },
+      { cmd: 'L', x: 35, y: 136 }
+    ]],
+    '8': [[
+      { cmd: 'M', x: 50, y: 68 },
+      { cmd: 'Q', cx: 20, cy: 68, x: 20, y: 38 },
+      { cmd: 'Q', cx: 20, cy: 6, x: 50, y: 6 },
+      { cmd: 'Q', cx: 80, cy: 6, x: 80, y: 38 },
+      { cmd: 'Q', cx: 80, cy: 68, x: 50, y: 68 },
+      { cmd: 'Q', cx: 80, cy: 68, x: 80, y: 102 },
+      { cmd: 'Q', cx: 80, cy: 134, x: 50, y: 134 },
+      { cmd: 'Q', cx: 20, cy: 134, x: 20, y: 102 },
+      { cmd: 'Q', cx: 20, cy: 68, x: 50, y: 68 }
+    ]],
+    '9': [[
+      { cmd: 'M', x: 66, y: 44 },
+      { cmd: 'Q', cx: 66, cy: 14, x: 45, y: 14 },
+      { cmd: 'Q', cx: 22, cy: 14, x: 22, y: 40 },
+      { cmd: 'Q', cx: 22, cy: 66, x: 45, y: 66 },
+      { cmd: 'Q', cx: 66, cy: 66, x: 66, y: 42 },
+      { cmd: 'L', x: 60, y: 100 },
+      { cmd: 'Q', cx: 57, cy: 128, x: 32, y: 132 }
+    ]]
   };
+
+  const STROKE_BOX_W = 100;
+  const STROKE_BOX_H = 140;
 
   // ---------------------------------------------------------------------
   // DOM refs
@@ -130,26 +176,12 @@
     return stage.order === 'sequential' ? nums : shuffle(nums);
   }
 
-  function getFont(size) {
-    return `900 ${Math.round(size)}px system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif`;
-  }
-
   function setupHiDPICanvas(canvas, wCss, hCss) {
     canvas.width = Math.max(1, Math.round(wCss * dpr));
     canvas.height = Math.max(1, Math.round(hCss * dpr));
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     return ctx;
-  }
-
-  function measureGlyph(ctx, text, size) {
-    ctx.font = getFont(size);
-    const m = ctx.measureText(text);
-    let ascent = m.actualBoundingBoxAscent;
-    let descent = m.actualBoundingBoxDescent;
-    if (!isFinite(ascent)) ascent = size * 0.72;
-    if (!isFinite(descent)) descent = size * 0.02;
-    return { width: m.width, ascent, descent, height: ascent + descent };
   }
 
   function sampleAlphaCount(ctx, canvas) {
@@ -187,145 +219,208 @@
 
   // ---------------------------------------------------------------------
   // Mask (paintable silhouette of the number) + guide (visual scaffolding)
+  //
+  // The mask, the dashed guide, the direction arrows, and the corrected
+  // reveal are all traced from the same DIGIT_STROKES data through the
+  // same character boxes, so the arrows always sit exactly on the line
+  // the child is meant to draw, start to finish.
   // ---------------------------------------------------------------------
-  // Digit "1" is drawn as a plain vertical bar (no top flag, no bottom foot)
-  // instead of the font glyph, per the simplified shape requested.
-  function drawOneBar(ctx, cursorX, top, height, advanceWidth, size, mode) {
-    const barWidth = size * 0.2;
-    const cx = cursorX + advanceWidth / 2;
-    const topY = top + height * 0.03;
-    const botY = top + height * 0.99;
-    if (mode === 'fill') {
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = ctx.fillStyle;
-      ctx.lineWidth = barWidth;
-      ctx.beginPath();
-      ctx.moveTo(cx, topY);
-      ctx.lineTo(cx, botY);
-      ctx.stroke();
-      ctx.restore();
-    } else if (mode === 'stroke') {
-      const half = barWidth / 2;
-      ctx.beginPath();
-      ctx.rect(cx - half, topY, barWidth, botY - topY);
-      ctx.stroke();
+  function computeLayout(number) {
+    const text = String(number);
+    const n = text.length;
+    let charH = cssH * 0.72;
+    let charW = charH * (STROKE_BOX_W / STROKE_BOX_H);
+    let gapPx = charH * 0.08;
+    let totalWidth = charW * n + gapPx * (n - 1);
+    const maxWidth = cssW * 0.8;
+    if (totalWidth > maxWidth) {
+      const scale = maxWidth / totalWidth;
+      charH *= scale;
+      charW *= scale;
+      gapPx *= scale;
+      totalWidth = maxWidth;
+    }
+    const x0 = cssW / 2 - totalWidth / 2;
+    const y0 = cssH / 2 - charH / 2;
+    return { text, n, charW, charH, gapPx, x0, y0 };
+  }
+
+  function charBox(lay, i) {
+    return { boxX: lay.x0 + i * (lay.charW + lay.gapPx), boxY: lay.y0, boxW: lay.charW, boxH: lay.charH };
+  }
+
+  function mapPt(box, dx, dy) {
+    return { x: box.boxX + (dx / STROKE_BOX_W) * box.boxW, y: box.boxY + (dy / STROKE_BOX_H) * box.boxH };
+  }
+
+  function tracePathOnCtx(ctx, stroke, box) {
+    for (const cmd of stroke) {
+      if (cmd.cmd === 'M') {
+        const p = mapPt(box, cmd.x, cmd.y);
+        ctx.moveTo(p.x, p.y);
+      } else if (cmd.cmd === 'L') {
+        const p = mapPt(box, cmd.x, cmd.y);
+        ctx.lineTo(p.x, p.y);
+      } else if (cmd.cmd === 'Q') {
+        const c = mapPt(box, cmd.cx, cmd.cy);
+        const p = mapPt(box, cmd.x, cmd.y);
+        ctx.quadraticCurveTo(c.x, c.y, p.x, p.y);
+      }
     }
   }
 
-  // Draws `text` character by character so digit "1" can use drawOneBar
-  // while every other digit uses the normal font glyph. mode 'fill' uses
-  // ctx.fillStyle/fillText, mode 'stroke' uses ctx.strokeStyle/strokeText
-  // (dash pattern, line width etc. must already be set on ctx by the caller).
-  function drawGlyphString(ctx, text, glyphX, glyphY, metrics, size, mode) {
-    const top = glyphY - metrics.ascent;
-    const height = metrics.height;
-    let cursor = glyphX;
-    for (const ch of text) {
-      const w = ctx.measureText(ch).width;
-      if (ch === '1') {
-        drawOneBar(ctx, cursor, top, height, w, size, mode);
-      } else if (mode === 'fill') {
-        ctx.fillText(ch, cursor, glyphY);
-      } else if (mode === 'stroke') {
-        ctx.strokeText(ch, cursor, glyphY);
-      }
-      cursor += w;
+  function forEachDigitStroke(lay, fn) {
+    for (let i = 0; i < lay.n; i++) {
+      const ch = lay.text[i];
+      const strokesForCh = DIGIT_STROKES[ch];
+      if (!strokesForCh) continue;
+      const box = charBox(lay, i);
+      strokesForCh.forEach((stroke, strokeIdx) => fn(stroke, box, strokeIdx, strokesForCh.length));
     }
+  }
+
+  function strokeAllDigits(ctx, lay) {
+    forEachDigitStroke(lay, (stroke, box) => {
+      ctx.beginPath();
+      tracePathOnCtx(ctx, stroke, box);
+      ctx.stroke();
+    });
   }
 
   function drawMask(number) {
-    const text = String(number);
-    let size = cssH * 0.72;
+    const lay = computeLayout(number);
     maskCtx.clearRect(0, 0, cssW, cssH);
-    let m = measureGlyph(maskCtx, text, size);
-    const maxWidth = cssW * 0.8;
-    if (m.width > maxWidth) {
-      size = size * (maxWidth / m.width);
-      m = measureGlyph(maskCtx, text, size);
-    }
-    const x = cssW / 2 - m.width / 2;
-    const y = cssH / 2 + m.height / 2 - m.descent;
-    maskCtx.fillStyle = '#000';
-    maskCtx.textBaseline = 'alphabetic';
-    maskCtx.font = getFont(size);
-    drawGlyphString(maskCtx, text, x, y, m, size, 'fill');
+    maskCtx.lineCap = 'round';
+    maskCtx.lineJoin = 'round';
+    maskCtx.setLineDash([]);
+    maskCtx.strokeStyle = '#000';
+    maskCtx.lineWidth = lay.charW * 0.26;
+    strokeAllDigits(maskCtx, lay);
     maskOpaqueCount = sampleAlphaCount(maskCtx, maskCanvas);
-    return { size, x, y, metrics: m };
+    return lay;
   }
 
-  function drawArrow(ctx, x1, y1, x2, y2, cx, cy, headSize) {
-    ctx.save();
-    ctx.strokeStyle = '#5b6fd8';
-    ctx.fillStyle = '#5b6fd8';
-    ctx.setLineDash([]);
-    ctx.lineWidth = Math.max(2, headSize * 0.35);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    let angle;
-    if (cx !== undefined) {
-      ctx.quadraticCurveTo(cx, cy, x2, y2);
-      angle = Math.atan2(y2 - cy, x2 - cx);
-    } else {
-      ctx.lineTo(x2, y2);
-      angle = Math.atan2(y2 - y1, x2 - x1);
+  // Flattens one stroke (already mapped into canvas space) into a dense
+  // polyline so arrows can be placed at even arc-length intervals along it.
+  function flattenStroke(stroke, box) {
+    const pts = [];
+    let cur = null;
+    for (const cmd of stroke) {
+      if (cmd.cmd === 'M') {
+        cur = mapPt(box, cmd.x, cmd.y);
+        pts.push(cur);
+      } else if (cmd.cmd === 'L') {
+        cur = mapPt(box, cmd.x, cmd.y);
+        pts.push(cur);
+      } else if (cmd.cmd === 'Q') {
+        const c = mapPt(box, cmd.cx, cmd.cy);
+        const p1 = mapPt(box, cmd.x, cmd.y);
+        const steps = 16;
+        for (let s = 1; s <= steps; s++) {
+          const t = s / steps, mt = 1 - t;
+          pts.push({
+            x: mt * mt * cur.x + 2 * mt * t * c.x + t * t * p1.x,
+            y: mt * mt * cur.y + 2 * mt * t * c.y + t * t * p1.y
+          });
+        }
+        cur = p1;
+      }
     }
-    ctx.stroke();
-    ctx.translate(x2, y2);
+    return pts;
+  }
+
+  // Walks a flattened polyline and returns {x,y,angle} at even spacing,
+  // skipping a little room at the very start/end for the start marker.
+  function pointsAlongPolyline(pts, spacing, startOffset, endMargin) {
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) {
+      cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+    }
+    const total = cum[cum.length - 1];
+    const out = [];
+    if (total < 1) return out;
+    for (let d = startOffset; d < total - endMargin; d += spacing) {
+      let idx = 1;
+      while (idx < cum.length - 1 && cum[idx] < d) idx++;
+      const segLen = (cum[idx] - cum[idx - 1]) || 1;
+      const t = (d - cum[idx - 1]) / segLen;
+      const p0 = pts[idx - 1], p1 = pts[idx];
+      out.push({
+        x: p0.x + (p1.x - p0.x) * t,
+        y: p0.y + (p1.y - p0.y) * t,
+        angle: Math.atan2(p1.y - p0.y, p1.x - p0.x)
+      });
+    }
+    return out;
+  }
+
+  function drawArrowHead(ctx, x, y, angle, headSize) {
+    ctx.save();
+    ctx.fillStyle = '#5b6ff0';
+    ctx.translate(x, y);
     ctx.rotate(angle);
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-headSize, headSize * 0.55);
-    ctx.lineTo(-headSize, -headSize * 0.55);
+    ctx.moveTo(headSize, 0);
+    ctx.lineTo(-headSize * 0.6, headSize * 0.6);
+    ctx.lineTo(-headSize * 0.6, -headSize * 0.6);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
   }
 
-  function drawArrowsForNumber(ctx, number, glyphX, glyphY, glyphInfo, size) {
-    const text = String(number);
-    const top = glyphY - glyphInfo.metrics.ascent;
-    const boxH = glyphInfo.metrics.height;
-    let cursorX = glyphX;
-    for (const ch of text) {
-      const w = ctx.measureText(ch).width;
-      const spec = ARROW_SPECS[ch] || [];
-      for (const seg of spec) {
-        const x1 = cursorX + seg.x1 * w, y1 = top + seg.y1 * boxH;
-        const x2 = cursorX + seg.x2 * w, y2 = top + seg.y2 * boxH;
-        let cx, cy;
-        if (seg.cx !== undefined) { cx = cursorX + seg.cx * w; cy = top + seg.cy * boxH; }
-        drawArrow(ctx, x1, y1, x2, y2, cx, cy, Math.max(10, size * 0.045));
+  // Draws a green "start here" dot (numbered when a digit needs more than
+  // one stroke) plus a run of arrowheads along the stroke's own path, so
+  // connecting dot -> arrows -> arrows traces the number itself.
+  function drawStrokeGuide(ctx, lay) {
+    forEachDigitStroke(lay, (stroke, box, strokeIdx, strokeCount) => {
+      const pts = flattenStroke(stroke, box);
+      if (pts.length < 2) return;
+      const headSize = Math.max(9, lay.charH * 0.05);
+      const spacing = Math.max(24, lay.charH * 0.3);
+
+      const start = pts[0];
+      ctx.save();
+      ctx.fillStyle = '#22c58b';
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, headSize * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      if (strokeCount > 1) {
+        ctx.fillStyle = '#fff';
+        ctx.font = `700 ${Math.round(headSize * 0.85)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(strokeIdx + 1), start.x, start.y + 1);
       }
-      cursorX += w;
-    }
+      ctx.restore();
+
+      const arrowPts = pointsAlongPolyline(pts, spacing, spacing * 0.7, spacing * 0.35);
+      for (const ap of arrowPts) drawArrowHead(ctx, ap.x, ap.y, ap.angle, headSize);
+    });
   }
 
-  function drawGuide(number, mode, glyphInfo) {
+  function drawGuide(number, mode, lay) {
     guideCtx.clearRect(0, 0, cssW, cssH);
     if (mode === 'none') return;
-    const text = String(number);
-    const { size, x, y } = glyphInfo;
-    guideCtx.font = getFont(size);
-    guideCtx.textBaseline = 'alphabetic';
-    guideCtx.lineJoin = 'round';
     guideCtx.lineCap = 'round';
+    guideCtx.lineJoin = 'round';
 
     if (mode === 'thick') {
-      guideCtx.fillStyle = 'rgba(79,109,245,0.10)';
-      drawGlyphString(guideCtx, text, x, y, glyphInfo.metrics, size, 'fill');
-      guideCtx.setLineDash([size * 0.05, size * 0.045]);
-      guideCtx.lineWidth = Math.max(4, size * 0.02);
+      guideCtx.setLineDash([]);
+      guideCtx.strokeStyle = 'rgba(91,111,240,0.12)';
+      guideCtx.lineWidth = lay.charW * 0.26;
+      strokeAllDigits(guideCtx, lay);
+      guideCtx.setLineDash([lay.charH * 0.05, lay.charH * 0.045]);
+      guideCtx.lineWidth = Math.max(4, lay.charH * 0.02);
       guideCtx.strokeStyle = '#9aa8e8';
-      drawGlyphString(guideCtx, text, x, y, glyphInfo.metrics, size, 'stroke');
+      strokeAllDigits(guideCtx, lay);
     } else if (mode === 'thin') {
-      guideCtx.setLineDash([size * 0.026, size * 0.05]);
-      guideCtx.lineWidth = Math.max(2, size * 0.008);
+      guideCtx.setLineDash([lay.charH * 0.026, lay.charH * 0.05]);
+      guideCtx.lineWidth = Math.max(2, lay.charH * 0.008);
       guideCtx.strokeStyle = '#b7c0e0';
-      drawGlyphString(guideCtx, text, x, y, glyphInfo.metrics, size, 'stroke');
+      strokeAllDigits(guideCtx, lay);
     }
     guideCtx.setLineDash([]);
-    drawArrowsForNumber(guideCtx, number, x, y, glyphInfo, size);
+    drawStrokeGuide(guideCtx, lay);
   }
 
   // ---------------------------------------------------------------------
@@ -509,15 +604,15 @@
   }
 
   function showResult() {
-    // Reuse the exact size/position/metrics the outline glyph was drawn
-    // with, so the "corrected" reveal matches it exactly, just filled in.
+    // Reuse the exact layout the outline/mask were drawn with, so the
+    // "corrected" reveal lines up with them exactly, just filled in.
     const rctx = setupHiDPICanvas(resultCanvas, cssW, cssH);
-    const text = String(currentNumber);
-    const { size, x, y, metrics } = currentGlyphInfo;
-    rctx.fillStyle = currentColor;
-    rctx.textBaseline = 'alphabetic';
-    rctx.font = getFont(size);
-    drawGlyphString(rctx, text, x, y, metrics, size, 'fill');
+    rctx.lineCap = 'round';
+    rctx.lineJoin = 'round';
+    rctx.setLineDash([]);
+    rctx.strokeStyle = currentColor;
+    rctx.lineWidth = currentGlyphInfo.charW * 0.26;
+    strokeAllDigits(rctx, currentGlyphInfo);
 
     resultOverlay.classList.remove('hidden');
     actionButtons.classList.add('hidden');
