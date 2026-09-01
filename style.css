@@ -435,9 +435,44 @@ button:active {
   touch-action: manipulation;
 }
 
-/* ---------- Narrow / portrait fallback ---------- */
-@media (max-aspect-ratio: 4/5) {
-  #main-area { flex-direction: column; }
-  #left-panel { flex: 0 0 32%; }
-  #right-panel { flex: 1 1 68%; }
+/* ---------- Landscape only ----------
+   The layout is designed for iPad landscape. A plain web page can't force
+   screen-orientation lock on iOS Safari, so instead: hide the app and ask
+   for a rotate whenever the device is in portrait. */
+#rotate-prompt {
+  display: none;
+  position: fixed;
+  inset: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: linear-gradient(165deg, var(--bg-start), var(--bg-end));
+  z-index: 1000;
+  text-align: center;
+  padding: 40px;
+}
+
+#rotate-icon {
+  font-size: 72px;
+  animation: rotate-hint 1.6s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+
+#rotate-prompt p {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 26px;
+  color: var(--ink-accent);
+  margin: 0;
+  max-width: 500px;
+}
+
+@media (orientation: portrait) {
+  #app { display: none; }
+  #rotate-prompt { display: flex; }
 }

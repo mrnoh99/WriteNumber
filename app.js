@@ -883,6 +883,9 @@
   restartBtn2.addEventListener('click', resetAll);
   restartBtn.addEventListener('click', resetAll);
   window.addEventListener('resize', debounce(layout, 200));
+  // iOS can report stale viewport dimensions right as orientationchange
+  // fires, before layout settles - re-measure a moment later too.
+  window.addEventListener('orientationchange', () => setTimeout(layout, 300));
 
   function init() {
     buildColorPicker();
