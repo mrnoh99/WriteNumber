@@ -27,10 +27,10 @@
   const DIGIT_STROKES = {
     '0': [[
       { cmd: 'M', x: 50, y: 6 },
-      { cmd: 'Q', cx: 92, cy: 6, x: 92, y: 70 },
-      { cmd: 'Q', cx: 92, cy: 134, x: 50, y: 134 },
-      { cmd: 'Q', cx: 8, cy: 134, x: 8, y: 70 },
-      { cmd: 'Q', cx: 8, cy: 6, x: 50, y: 6 }
+      { cmd: 'Q', cx: 8, cy: 6, x: 8, y: 70 },
+      { cmd: 'Q', cx: 8, cy: 134, x: 50, y: 134 },
+      { cmd: 'Q', cx: 92, cy: 134, x: 92, y: 70 },
+      { cmd: 'Q', cx: 92, cy: 6, x: 50, y: 6 }
     ]],
     '1': [[
       { cmd: 'M', x: 50, y: 18 },
