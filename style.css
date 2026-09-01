@@ -562,7 +562,8 @@ button:active {
 .recording-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: #f7f8fd;
@@ -585,8 +586,13 @@ button:active {
   flex: 1 1 auto;
 }
 
-.recording-status.has-recording {
+.recording-status.using-custom {
   color: var(--accent-green-dark);
+  font-weight: 700;
+}
+
+.recording-status.using-machine {
+  color: #9098b8;
   font-weight: 700;
 }
 
@@ -599,11 +605,19 @@ button:active {
   background: #e9ecfb;
   color: var(--text-soft);
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .rec-btn:disabled {
   opacity: 0.4;
+}
+
+.rec-record-btn {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .rec-record-btn.recording {
@@ -620,6 +634,11 @@ button:active {
 .rec-play-btn:not(:disabled) {
   background: linear-gradient(120deg, var(--ink-accent), var(--ink-accent-2));
   color: #fff;
+}
+
+.rec-voice-toggle-btn:not(:disabled) {
+  background: #fff1cf;
+  color: #a3720a;
 }
 
 .rec-delete-btn:not(:disabled) {

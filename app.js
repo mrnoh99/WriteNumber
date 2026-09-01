@@ -897,6 +897,22 @@
     } catch (e) { /* IndexedDB unavailable - app still works, just without custom voices */ }
   }
 
+  // Whether to use a recorded voice vs. always fall back to TTS ("기계음"),
+  // kept separate from whether a recording exists so a saved recording can
+  // be switched off without deleting it. Persisted in localStorage since
+  // it's just a handful of small flags.
+  const VOICE_ENABLED_KEY = 'writenumber-voice-enabled';
+  let voiceEnabled = {};
+  try { voiceEnabled = JSON.parse(localStorage.getItem(VOICE_ENABLED_KEY) || '{}'); } catch (e) { voiceEnabled = {}; }
+
+  function saveVoiceEnabled() {
+    try { localStorage.setItem(VOICE_ENABLED_KEY, JSON.stringify(voiceEnabled)); } catch (e) { /* ignore */ }
+  }
+
+  function isUsingCustomVoice(id) {
+    return !!recordingURLs[id] && voiceEnabled[id] !== false;
+  }
+
   // Plays a recorded clip and resolves once it finishes (or fails),
   // so callers can chain a fallback or a second clip afterwards.
   function playRecording(id) {
@@ -930,19 +946,19 @@
   function speakNumber(number) {
     try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
     const id = `num-${number}`;
-    if (recordingURLs[id]) { playRecording(id); return; }
+    if (isUsingCustomVoice(id)) { playRecording(id); return; }
     speakTTS(String(number));
   }
 
   // Reads the number once more, then the praise comment - a recording for
-  // either part if one exists, otherwise TTS - back-to-back rather than
-  // overlapping.
+  // either part if one exists and is enabled, otherwise TTS - back-to-back
+  // rather than overlapping.
   async function announcePraise(number) {
     try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
     const numId = `num-${number}`;
-    if (recordingURLs[numId]) await playRecording(numId);
+    if (isUsingCustomVoice(numId)) await playRecording(numId);
     else speakTTS(String(number));
-    if (recordingURLs['comment']) await playRecording('comment');
+    if (isUsingCustomVoice('comment')) await playRecording('comment');
     else speakTTS('잘했어요');
   }
 
@@ -1045,10 +1061,14 @@
     return undefined;
   }
 
+  let stopRequested = false;
+
   function startRecording(id, onDone, onError) {
     if (activeRecorder) return;
+    stopRequested = false;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { onError(); return; }
     navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      if (stopRequested) { stream.getTracks().forEach((t) => t.stop()); onError(); return; }
       activeStream = stream;
       const mimeType = pickRecorderMimeType();
       const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -1066,10 +1086,12 @@
       };
       rec.start();
       activeRecorder = rec;
+      if (stopRequested) rec.stop();
     }).catch(() => onError());
   }
 
   function stopRecording() {
+    stopRequested = true;
     if (activeRecorder && activeRecorder.state !== 'inactive') activeRecorder.stop();
     else if (activeStream) { activeStream.getTracks().forEach((t) => t.stop()); activeStream = null; }
   }
@@ -1087,47 +1109,87 @@
 
     const recordBtn = document.createElement('button');
     recordBtn.className = 'rec-btn rec-record-btn';
-    recordBtn.textContent = '🎙️ 녹음';
+    recordBtn.textContent = '🎙️ 누르고 녹음';
 
     const playBtn = document.createElement('button');
     playBtn.className = 'rec-btn rec-play-btn';
     playBtn.textContent = '▶️ 재생';
 
+    const voiceToggleBtn = document.createElement('button');
+    voiceToggleBtn.className = 'rec-btn rec-voice-toggle-btn';
+
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'rec-btn rec-delete-btn';
-    deleteBtn.textContent = '🗑️';
+    deleteBtn.textContent = '🗑️ 삭제';
 
     function refresh() {
       const has = !!recordingURLs[id];
-      statusEl.textContent = has ? '녹음됨' : '녹음 없음';
-      statusEl.classList.toggle('has-recording', has);
+      const usingCustom = isUsingCustomVoice(id);
+      if (!has) {
+        statusEl.textContent = '녹음 없음';
+        statusEl.className = 'recording-status';
+      } else if (usingCustom) {
+        statusEl.textContent = '내 목소리 사용 중';
+        statusEl.className = 'recording-status using-custom';
+      } else {
+        statusEl.textContent = '기계음 사용 중';
+        statusEl.className = 'recording-status using-machine';
+      }
       playBtn.disabled = !has;
       deleteBtn.disabled = !has;
+      voiceToggleBtn.disabled = !has;
+      voiceToggleBtn.textContent = usingCustom ? '🤖 기계음으로' : '🎙️ 내 목소리로';
     }
 
-    recordBtn.addEventListener('click', () => {
-      if (recordBtn.classList.contains('recording')) {
-        stopRecording();
-        return;
-      }
+    // Record only while the button is held down (push-to-talk style)
+    // rather than tap-to-start/tap-to-stop.
+    let pressActive = false;
+    function beginPress(e) {
+      if (pressActive) return;
+      pressActive = true;
+      e.preventDefault();
       recordBtn.classList.add('recording');
-      recordBtn.textContent = '⏹️ 정지';
+      recordBtn.textContent = '🔴 녹음 중...';
       startRecording(
         id,
-        () => { recordBtn.classList.remove('recording'); recordBtn.textContent = '🎙️ 녹음'; refresh(); },
         () => {
           recordBtn.classList.remove('recording');
-          recordBtn.textContent = '🎙️ 녹음';
+          recordBtn.textContent = '🎙️ 누르고 녹음';
+          voiceEnabled[id] = true;
+          saveVoiceEnabled();
+          refresh();
+        },
+        () => {
+          recordBtn.classList.remove('recording');
+          recordBtn.textContent = '🎙️ 누르고 녹음';
           statusEl.textContent = '마이크 권한이 필요해요';
         }
       );
-    });
+    }
+    function endPress() {
+      if (!pressActive) return;
+      pressActive = false;
+      stopRecording();
+    }
+    recordBtn.addEventListener('pointerdown', beginPress);
+    recordBtn.addEventListener('pointerup', endPress);
+    recordBtn.addEventListener('pointercancel', endPress);
+    recordBtn.addEventListener('pointerleave', endPress);
 
     playBtn.addEventListener('click', () => { if (recordingURLs[id]) playRecording(id); });
+
+    voiceToggleBtn.addEventListener('click', () => {
+      if (!recordingURLs[id]) return;
+      voiceEnabled[id] = !isUsingCustomVoice(id);
+      saveVoiceEnabled();
+      refresh();
+    });
 
     deleteBtn.addEventListener('click', async () => {
       if (recordingURLs[id]) URL.revokeObjectURL(recordingURLs[id]);
       delete recordingURLs[id];
+      delete voiceEnabled[id];
+      saveVoiceEnabled();
       try { if (recordingDB) await dbDeleteRecording(id); } catch (e) { /* ignore */ }
       refresh();
     });
@@ -1136,6 +1198,7 @@
     row.appendChild(statusEl);
     row.appendChild(recordBtn);
     row.appendChild(playBtn);
+    row.appendChild(voiceToggleBtn);
     row.appendChild(deleteBtn);
     refresh();
     return row;
