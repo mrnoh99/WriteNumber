@@ -371,25 +371,43 @@
   // Draws a green "start here" dot (numbered when a digit needs more than
   // one stroke) plus a run of arrowheads along the stroke's own path, so
   // connecting dot -> arrows -> arrows traces the number itself.
+  // Nudges a start-marker away from ones already placed for this digit, so
+  // two strokes that begin at (or near) the same point - like "5"'s top
+  // bar and its down-stroke - don't draw their numbered badges on top of
+  // each other. Only the badge moves; the arrows still trace the true path.
+  function resolveMarkerPos(pos, placed, minDist) {
+    let candidate = pos;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const collides = placed.some((p) => Math.hypot(p.x - candidate.x, p.y - candidate.y) < minDist);
+      if (!collides) break;
+      const angle = (Math.PI * 2 * attempt) / 8 - Math.PI / 2;
+      candidate = { x: pos.x + Math.cos(angle) * minDist * 1.3, y: pos.y + Math.sin(angle) * minDist * 1.3 };
+    }
+    return candidate;
+  }
+
   function drawStrokeGuide(ctx, lay) {
+    const placedMarkers = [];
     forEachDigitStroke(lay, (stroke, box, strokeIdx, strokeCount) => {
       const pts = flattenStroke(stroke, box);
       if (pts.length < 2) return;
       const headSize = Math.max(9, lay.charH * 0.05);
       const spacing = Math.max(24, lay.charH * 0.3);
 
-      const start = pts[0];
+      const marker = strokeCount > 1 ? resolveMarkerPos(pts[0], placedMarkers, headSize * 1.9) : pts[0];
+      placedMarkers.push(marker);
+
       ctx.save();
       ctx.fillStyle = '#22c58b';
       ctx.beginPath();
-      ctx.arc(start.x, start.y, headSize * 0.6, 0, Math.PI * 2);
+      ctx.arc(marker.x, marker.y, headSize * 0.6, 0, Math.PI * 2);
       ctx.fill();
       if (strokeCount > 1) {
         ctx.fillStyle = '#fff';
         ctx.font = `700 ${Math.round(headSize * 0.85)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(strokeIdx + 1), start.x, start.y + 1);
+        ctx.fillText(String(strokeIdx + 1), marker.x, marker.y + 1);
       }
       ctx.restore();
 
