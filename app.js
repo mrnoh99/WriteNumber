@@ -660,7 +660,7 @@
     return best;
   }
 
-  const SHAPE_MATCH_THRESHOLD = 0.3;
+  const SHAPE_MATCH_THRESHOLD = 0.22;
 
   inkCanvas.addEventListener('pointerdown', (e) => {
     if (activePointerId !== null) return;
@@ -899,17 +899,28 @@
     announcePraise(currentNumber);
   }
 
+  function retryWithGuide(msg, spokenText) {
+    showHint(msg, spokenText);
+    strokes = [];
+    activePointerId = null;
+    clearInk();
+    // The first attempt on this stage is guide-free by design, but once
+    // it's been missed, show a helper guide for the retry instead of
+    // leaving them stuck with no hint at all.
+    drawGuide(currentNumber, 'thin', currentGlyphInfo);
+  }
+
   function checkCompletion() {
     const mode = currentStageGuideMode();
     if (mode === 'none') {
       const totalPoints = strokes.reduce((a, s) => a + s.points.length, 0);
-      if (totalPoints < 8) { showHint('숫자를 크게 써볼까요? ✏️'); return; }
+      if (totalPoints < 8) {
+        retryWithGuide('숫자를 크게 써볼까요? ✏️');
+        return;
+      }
       const score = computeShapeMatchScore();
       if (score < SHAPE_MATCH_THRESHOLD) {
-        showHint(`${currentNumber}(이)가 아닌 것 같아요. 지우고 다시 써볼까요? ✏️`, `${currentNumber} 모양이 아닌 것 같아요. 지우고 다시 써볼까요?`);
-        strokes = [];
-        activePointerId = null;
-        clearInk();
+        retryWithGuide(`${currentNumber}(이)가 아닌 것 같아요. 지우고 다시 써볼까요? ✏️`, `${currentNumber} 모양이 아닌 것 같아요. 지우고 다시 써볼까요?`);
         return;
       }
       showResult();
