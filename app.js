@@ -510,6 +510,78 @@
     return count;
   }
 
+  // ---------------------------------------------------------------------
+  // Freeform-stage shape check: no font/ML OCR is involved. Instead the
+  // child's ink is compared against our own digit-stroke silhouette for
+  // this number (the same one drawn as the mask in earlier stages, still
+  // rendered off-screen to maskCanvas every round even in this stage).
+  // Both shapes are re-sampled into a small canonical grid using their own
+  // bounding box (uniform scale, centered) so it doesn't matter where on
+  // the blank canvas the child drew or how big - only whether the *shape*
+  // lines up with the target digit's shape, via Intersection-over-Union.
+  // ---------------------------------------------------------------------
+  function findInkBBox(data, width, height) {
+    let minX = width, minY = height, maxX = -1, maxY = -1;
+    for (let y = 0; y < height; y += 2) {
+      const rowBase = y * width;
+      for (let x = 0; x < width; x += 2) {
+        if (data[(rowBase + x) * 4 + 3] > 10) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    return maxX < 0 ? null : { minX, minY, maxX, maxY };
+  }
+
+  const SHAPE_GRID_W = 40;
+  const SHAPE_GRID_H = 56;
+
+  function buildCanonicalGrid(data, width, height, bbox) {
+    const grid = new Uint8Array(SHAPE_GRID_W * SHAPE_GRID_H);
+    const bboxW = Math.max(1, bbox.maxX - bbox.minX);
+    const bboxH = Math.max(1, bbox.maxY - bbox.minY);
+    const scale = Math.min(SHAPE_GRID_W / bboxW, SHAPE_GRID_H / bboxH) * 0.9;
+    const offX = (SHAPE_GRID_W - bboxW * scale) / 2;
+    const offY = (SHAPE_GRID_H - bboxH * scale) / 2;
+    for (let gy = 0; gy < SHAPE_GRID_H; gy++) {
+      for (let gx = 0; gx < SHAPE_GRID_W; gx++) {
+        const srcX = Math.round(bbox.minX + (gx - offX) / scale);
+        const srcY = Math.round(bbox.minY + (gy - offY) / scale);
+        if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height) {
+          grid[gy * SHAPE_GRID_W + gx] = data[(srcY * width + srcX) * 4 + 3] > 10 ? 1 : 0;
+        }
+      }
+    }
+    return grid;
+  }
+
+  function gridIoU(a, b) {
+    let inter = 0, union = 0;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] || b[i]) union++;
+      if (a[i] && b[i]) inter++;
+    }
+    return union > 0 ? inter / union : 0;
+  }
+
+  // Returns an IoU score in [0,1], or 0 if there's nothing to compare.
+  function computeShapeMatchScore() {
+    const w = inkCanvas.width, h = inkCanvas.height;
+    const inkData = inkCtx.getImageData(0, 0, w, h).data;
+    const maskData = maskCtx.getImageData(0, 0, w, h).data;
+    const inkBBox = findInkBBox(inkData, w, h);
+    const maskBBox = findInkBBox(maskData, w, h);
+    if (!inkBBox || !maskBBox) return 0;
+    const inkGrid = buildCanonicalGrid(inkData, w, h, inkBBox);
+    const maskGrid = buildCanonicalGrid(maskData, w, h, maskBBox);
+    return gridIoU(inkGrid, maskGrid);
+  }
+
+  const SHAPE_MATCH_THRESHOLD = 0.3;
+
   inkCanvas.addEventListener('pointerdown', (e) => {
     if (activePointerId !== null) return;
     activePointerId = e.pointerId;
@@ -738,6 +810,14 @@
     if (mode === 'none') {
       const totalPoints = strokes.reduce((a, s) => a + s.points.length, 0);
       if (totalPoints < 8) { showHint('숫자를 크게 써볼까요? ✏️'); return; }
+      const score = computeShapeMatchScore();
+      if (score < SHAPE_MATCH_THRESHOLD) {
+        showHint(`${currentNumber}(이)가 아닌 것 같아요. 지우고 다시 써볼까요? ✏️`);
+        strokes = [];
+        activePointerId = null;
+        clearInk();
+        return;
+      }
       showResult();
       return;
     }
