@@ -730,11 +730,24 @@
   // ---------------------------------------------------------------------
   // Completion / praise
   // ---------------------------------------------------------------------
-  function showHint(msg) {
+  function showHint(msg, spokenText) {
     hintToast.textContent = msg;
     hintToast.classList.remove('hidden');
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => hintToast.classList.add('hidden'), 1600);
+    speakHint(spokenText || msg);
+  }
+
+  // Reads a hint message aloud (stripping emoji, which some voices would
+  // otherwise try to narrate), interrupting anything currently speaking.
+  function speakHint(text) {
+    try {
+      if (!('speechSynthesis' in window)) return;
+      const spoken = text.replace(/[\u{1F1E6}-\u{1FAFF}\u{2600}-\u{27BF}️]/gu, '').trim();
+      if (!spoken) return;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(makeUtterance(spoken));
+    } catch (e) { /* speech synthesis is a nice-to-have; ignore failures */ }
   }
 
   function makeUtterance(text) {
@@ -813,7 +826,7 @@
       if (totalPoints < 8) { showHint('숫자를 크게 써볼까요? ✏️'); return; }
       const score = computeShapeMatchScore();
       if (score < SHAPE_MATCH_THRESHOLD) {
-        showHint(`${currentNumber}(이)가 아닌 것 같아요. 지우고 다시 써볼까요? ✏️`);
+        showHint(`${currentNumber}(이)가 아닌 것 같아요. 지우고 다시 써볼까요? ✏️`, `${currentNumber} 모양이 아닌 것 같아요. 지우고 다시 써볼까요?`);
         strokes = [];
         activePointerId = null;
         clearInk();
